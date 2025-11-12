@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SHL Assessment Recommender</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            min-height: 100vh; 
+            padding: 20px; 
+        }
+        .container { max-width: 1000px; margin: 0 auto; }
+        .header { text-align: center; color: white; margin-bottom: 40px; }
+        .header h1 { font-size: 2.5em; margin-bottom: 10px; }
+        .header p { font-size: 1.1em; opacity: 0.9; }
+        .card { background: white; border-radius: 10px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); margin-bottom: 30px; }
+        .input-group { margin-bottom: 20px; }
+        label { display: block; font-weight: 600; margin-bottom: 10px; color: #333; }
+        textarea { width: 100%; padding: 15px; border: 2px solid #e0e0e0; border-radius: 5px; font-size: 1em; font-family: inherit; resize: vertical; min-height: 100px; }
+        textarea:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+        button { background: #667eea; color: white; padding: 12px 30px; border: none; border-radius: 5px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+        button:hover { background: #764ba2; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4); }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .loading { text-align: center; color: #667eea; padding: 20px; }
+        .spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid #f3f3f3; border-top: 3px solid #667eea; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th { background: #f5f5f5; padding: 15px; text-align: left; font-weight: 600; color: #333; border-bottom: 2px solid #e0e0e0; }
+        td { padding: 12px 15px; border-bottom: 1px solid #e0e0e0; }
+        tr:hover { background: #f9f9f9; }
+        .score { background: #e8f5e9; color: #2e7d32; padding: 4px 8px; border-radius: 3px; font-weight: 600; }
+        .type-badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 0.85em; font-weight: 600; }
+        .type-k { background: #bbdefb; color: #1565c0; }
+        .type-p { background: #f8bbd0; color: #c2185b; }
+        a { color: #667eea; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .error { background: #ffebee; color: #c62828; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #c62828; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 SHL Assessment Recommender</h1>
+            <p>Find the perfect assessments for any job role</p>
+        </div>
+
+        <div class="card">
+            <div class="input-group">
+                <label for="query">Job Description or Query</label>
+                <textarea id="query" placeholder="E.g., I need a Java developer with strong leadership and communication skills..."></textarea>
+            </div>
+            <button onclick="getRecommendations()">Get Recommendations</button>
+            <div id="loading" class="loading" style="display: none;">
+                <div class="spinner"></div> Loading recommendations...
+            </div>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://127.0.0.1:8000';
+
+        async function getRecommendations() {
+            const query = document.getElementById('query').value.trim();
+            
+            if (!query) {
+                showError('Please enter a job description or query');
+                return;
+            }
+
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').innerHTML = '';
+
+            try {
+                const response = await fetch(`${API_URL}/recommend`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        query: query,
+                        max_results: 10
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                displayResults(data);
+            } catch (error) {
+                showError(`Error: ${error.message}`);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        function displayResults(data) {
+            if (!data.recommendations || data.recommendations.length === 0) {
+                showError('No recommendations found');
+                return;
+            }
+
+            let html = '<div class="card"><h2>Recommendations</h2>';
+            html += `<p><strong>Query:</strong> ${data.query}</p>`;
+            html += '<table>';
+            html += '<thead><tr><th>Assessment Name</th><th>Type</th><th>Relevance Score</th><th>Link</th></tr></thead>';
+            html += '<tbody>';
+
+            data.recommendations.forEach((rec, idx) => {
+                const typeClass = rec.test_type === 'K' ? 'type-k' : rec.test_type === 'P' ? 'type-p' : '';
+                const typeLabel = rec.test_type === 'K' ? 'Knowledge' : rec.test_type === 'P' ? 'Personality' : 'Other';
+                html += `<tr>
+                    <td><strong>${idx + 1}. ${rec.assessment_name}</strong></td>
+                    <td><span class="type-badge ${typeClass}">${typeLabel}</span></td>
+                    <td><span class="score">${(rec.relevance_score * 100).toFixed(1)}%</span></td>
+                    <td><a href="${rec.assessment_url}" target="_blank">View →</a></td>
+                </tr>`;
+            });
+
+            html += '</tbody></table>';
+            html += `<p style="margin-top: 15px; color: #666;"><strong>Total Results:</strong> ${data.total_results}</p>`;
+            html += '</div>';
+
+            document.getElementById('results').innerHTML = html;
+        }
+
+        function showError(message) {
+            document.getElementById('results').innerHTML = `<div class="card"><div class="error">${message}</div></div>`;
+        }
+
+        // Allow Enter key to submit
+        document.getElementById('query').addEventListener('keypress', function(e) {
+            if (e.ctrlKey && e.key === 'Enter') {
+                getRecommendations();
+            }
+        });
+    </script>
+</body>
+</html>
